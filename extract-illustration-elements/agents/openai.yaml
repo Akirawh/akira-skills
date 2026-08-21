@@ -1,0 +1,13 @@
+interface:
+  display_name: 插画元素拆分与补全
+  short_description: 识别并拆分插画元素，补全遮挡区域，输出适合贴纸与冰箱贴的透明素材
+  default_prompt: 使用 $extract-illustration-elements 拆分这张水彩插画中的独立元素，补全遮挡，并输出透明底贴纸素材。
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

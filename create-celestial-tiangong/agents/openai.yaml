@@ -1,0 +1,13 @@
+interface:
+  display_name: create celestial tiangong
+  short_description: 生成、改写和诊断东方天宫、仙界、神域、浮空宫殿、仙侠史诗建筑的图像或视频提示词与分镜方案。用户提及天宫、天庭、仙界、神域、月宫、星宫、云上祭坛、浮空城、仙侠世界观、巨物尺度东方建筑，或要求为
+    Midjourney、Flux、SDXL、即梦、可灵、Runway、AI 漫剧设计相关视觉时使用。
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true
