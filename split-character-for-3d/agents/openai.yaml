@@ -1,0 +1,13 @@
+interface:
+  display_name: 角色模型部件拆分
+  short_description: 把角色参考图拆成适合 AI 生成三维模型与后续拼装的独立部件
+  default_prompt: 使用 $split-character-for-3d 分析这张角色参考图，并生成适合 AI 三维建模的部件拆分方案和参考图。
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

@@ -1,0 +1,13 @@
+interface:
+  display_name: 图像提示词反推
+  short_description: 从参考图提炼关键视觉变量，生成简洁准确的中文生图提示词
+  default_prompt: 使用 $reverse-engineer-image-prompt 拆解这张参考图，并输出简洁、可直接生图的中文提示词。
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true
