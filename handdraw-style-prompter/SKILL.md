@@ -1,71 +1,97 @@
 ---
 name: handdraw-style-prompter
-description: Turn a 001–261 hand-drawn style number and image theme into bilingual prompts, or generate an image with a model-capability-aware decision about whether the matching numbered image is needed as a style reference.
+description: Turn a 001–261 hand-drawn style number and image theme into bilingual prompts, or explicitly generate an image using the best available style-reference strategy for the current OpenAI surface.
 ---
 
 # Hand-drawn Style Prompter
 
-Default to creating prompts only. Do not call an image-generation tool unless the user explicitly asks to generate, render, or preview an image.
-
-## Explicit image-generation mode
-
-When the user explicitly requests image generation, first resolve the current image model (or model family) against `references/model_capabilities.json` or the equivalent runtime capability metadata. The decision uses the complete text that will be sent to the model: the indexed author name plus the generated style name. It is not based on the author's fame or life status.
-
-- `name_activation=strong`: first choice. Send only the indexed author name plus generated style name and theme; do not add core traits or pass a reference image.
-- If name activation is not strong but `traits_activation=strong` and the style has core traits, second choice. Add only positive, concrete visual traits to the author-name + style-name prompt and do not pass a reference image.
-- If neither author-name + style-name nor author-name + style-name + traits is strong, last choice. Pass the configured reference asset through the image-generation tool's `referenced_image_paths` parameter. Assets live in numbered 200-style buckets: for example, #217 uses `images/individual/201-400/217_grid.jpg`.
-- If the model identifier or its capability entry is unavailable, treat it as `unknown` and pass the image as the safe fallback.
-- Use `python scripts/resolve_reference.py --model <model> --style <number>` when a deterministic decision check is useful. The script prints JSON and never guesses an unknown model's capability.
-- The resolver reports `activation_source` as `name+style`, `name+style+traits`, or `reference-image`, plus the filtered `prompt_traits` when traits are used.
-
-- Resolve the style number to its configured reference asset. The normal fallback is `images/individual/{bucket}/{number}.png` (for example, `048` maps to `images/individual/001-200/048.png`); a matching `{number}_grid.jpg` in the same bucket takes priority.
-- When an image is passed, inject the following reference-isolation block into the actual image-generation prompt. It is required for every reference-image generation and is not added to ordinary prompt-only output:
-
-  Chinese: `所附图片仅用于参考画风。只提取参考图的风格特征，例如线条、笔触、媒介、材质、色彩倾向和整体视觉语言；不要使用、复制或延续参考图中的任何主体、人物、动物、服装、道具、动作、姿态、场景、背景、构图、布局、文字或故事。最终画面内容完全以用户提供的主题为准。`
-
-  English: `Use the attached image only as a style reference. Extract only its stylistic qualities, such as linework, brushwork, medium, material texture, color tendencies, and overall visual language. Do not use, copy, or carry over any subject, person, animal, clothing, prop, action, pose, setting, background, composition, layout, text, or story from the reference image. The user's written theme is the sole source for the image content.`
-
-- The user's theme is the sole source for subjects and narrative; the reference image must never override or add content to the theme.
-- When core traits are used instead of an image, include only positive visible traits; filter clauses containing `避免`, `不要`, or `不准` and do not copy the traits field mechanically.
-- If the numbered image is missing or cannot be passed, report that limitation and provide the normal text prompts; never invent or substitute a reference image.
-- After generation, identify whether the numbered reference image was used. If used, identify its number. Do not imply generation when the user requested prompts only.
-
-## Session initialization
-
-On the first turn in the current Codex task/thread where this Skill is invoked, initialize the visual index before handling the user's request:
-
-1. If this task has not already displayed the gallery, call `mcp__codex_app__open_in_codex` with `target: { type: "browser", url: "gallery/index.html" }` so the rendered gallery opens in the in-app browser.
-2. Continue with the user's request after the browser call; opening the gallery must not block prompt generation or an explicitly requested image-generation follow-up.
-3. Do not repeat the browser call on later turns in the same task/thread. Use the conversation context (not a persistent state file) to determine whether initialization already happened.
-4. If the browser call is unavailable or fails, provide this fallback link: [打开手绘风格编号画廊](gallery/index.html), then continue normally.
-
-This initialization applies only when this Skill is invoked for the first time in a task/thread; unrelated conversations must not open the gallery.
+Default to prompt generation only. Generate or render an image only when the user explicitly asks for an image, preview, render, or generation.
 
 ## Inputs
 
-Require a style number (`001`–`261`) and a theme. Accept optional aspect ratio, subject constraints, and text requirements. If the number is absent or invalid, ask the user to choose a valid number; do not invent a style. Do not add an aspect ratio when none was supplied.
+Require a style number (`001`–`261`) and a theme. Accept optional aspect ratio, subject constraints, and text requirements.
 
-Users can browse `gallery/index.html` for the numbered contact sheets. The authoritative style content is `styles_200_reorganized.md`; `references/styles.json` is a generated index and must be refreshed with `python scripts/build_library.py` after the Markdown changes.
+- If the style number is missing or invalid, ask for a valid number; never invent one.
+- Do not add an aspect ratio, copy, subject, or other constraint the user did not supply.
+- `references/styles.json` is the runtime style index. `styles_200_reorganized.md` is the authoritative source and should be rebuilt into the derived index with `python scripts/build_library.py` after edits.
 
-## Output
+## Prompt-only mode
 
-For a valid request, return these four parts:
+For a valid request, return four compact parts:
 
-1. Selected style: number and generated style name. Do not output a core-visual-traits field by default for ordinary prompt-only requests.
-2. Chinese prompt: begin the copyable prompt itself with `风格名称：#{编号} · {generation_name}。`; describe only the user's theme and constraints explicitly provided by the user, and always include the indexed author/style name as a short `参考作者/风格名称` label. Do not append core traits, the fixed style anchor, extra style adjectives, generic composition advice, quality claims, or negative prompts.
-3. English prompt: begin the copyable prompt itself with `Style name: #{number} · {generation_name}.`; describe only the same theme and user-provided constraints, and always include the indexed author/style name as `Reference author/style name`. Do not append visual-trait prose, generic composition advice, quality claims, negative prompts, or the fixed style anchor.
-4. A brief note: the prompt can be pasted into any image AI; generation is controlled by that AI.
+1. Selected style: number and `generation_name`.
+2. Chinese prompt beginning with `风格名称：#{number} · {generation_name}。` and including the indexed `reference` as `参考作者/风格名称：...`.
+3. English prompt beginning with `Style name: #{number} · {generation_name}.` and including the same indexed reference as `Reference author/style name: ...`.
+4. One brief note that the prompt can be used in an image AI and that generation is controlled by that AI.
 
-Do not invent visual traits, extra style descriptions, generic quality/composition language, or default avoid-list wording. Include each entry's original reference author/style name from the index in both prompts as requested; this is an index label, not a claim about the person or an instruction to imitate them. Never use fame or life status as a proxy for model capability.
+For ordinary prompt-only requests:
 
-Describe only concrete visible content implied by the theme—subjects, actions, objects, environment, and mood when needed. Leave composition, layout, visual richness, quality, and rendering decisions to the image AI. Respect a user-specified text requirement but do not invent copy.
+- Describe only the user's theme and explicit constraints.
+- Do not append `traits`, fixed style anchors, generic quality language, generic composition advice, negative prompts, or invented details.
+- Treat the indexed reference as a lookup label, not as a factual claim about the person and not as a reason to infer model capability.
+- Do not use fame, life status, or popularity as a proxy for model behavior.
+
+## Explicit image-generation mode
+
+Use the native image-generation capability actually available on the current surface. Do not assume a particular tool name, MCP function, or argument name.
+
+### 1. Resolve the preferred style strategy
+
+If the current image model or model family is known, resolve it against `references/model_capabilities.json`. If it is not known, treat it as `unknown`; never guess a model identifier.
+
+`python scripts/resolve_reference.py --model <model> --style <number>` may be used for a deterministic preference check. Its `activation_source` is one of:
+
+- `name+style`: use the indexed reference name + generated style name + user's theme; no reference image.
+- `name+style+traits`: additionally use only positive, concrete visible traits from the index; no reference image.
+- `reference-image`: prefer the numbered reference asset when the current surface can actually attach a bundled image to image generation.
+
+Filter trait clauses containing `避免`, `不要`, or `不准`. Do not copy the full traits field mechanically.
+
+### 2. Reference-image fallback must be surface-aware
+
+Resolve the numbered asset from `images/individual/{bucket}/`. Prefer `{number}_grid.jpg` when present; otherwise use `{number}.png`.
+
+If the current runtime can attach that bundled asset to its image-generation request, attach it using the runtime's supported mechanism. Never invent or hard-code a parameter name such as `referenced_image_paths`.
+
+If the current runtime cannot pass bundled Skill images into image generation:
+
+- do not pretend a reference image was attached;
+- fall back to `name+style+traits` when positive traits are available;
+- otherwise use `name+style` only;
+- do not substitute an unrelated image.
+
+When a numbered reference image is actually attached, add this reference-isolation instruction to the generation prompt:
+
+`所附图片仅用于参考画风。只提取参考图的风格特征，例如线条、笔触、媒介、材质、色彩倾向和整体视觉语言；不要使用、复制或延续参考图中的任何主体、人物、动物、服装、道具、动作、姿态、场景、背景、构图、布局、文字或故事。最终画面内容完全以用户提供的主题为准。`
+
+English equivalent:
+
+`Use the attached image only as a style reference. Extract only its stylistic qualities, such as linework, brushwork, medium, material texture, color tendencies, and overall visual language. Do not use, copy, or carry over any subject, person, animal, clothing, prop, action, pose, setting, background, composition, layout, text, or story from the reference image. The user's written theme is the sole source for the image content.`
+
+The user's theme remains the sole source for subjects and narrative.
+
+## Gallery
+
+`gallery/index.html` is the bundled numbered gallery.
+
+- Do not open it automatically when the Skill starts.
+- If the user asks to browse or choose a style visually, open the bundled gallery only when the current surface exposes a supported way to open local Skill resources.
+- If that capability is unavailable, mention the bundled path `gallery/index.html` and continue without blocking the user's task.
+- Never call a Codex-only browser function merely because this Skill is running in ChatGPT.
+
+## Portability
+
+This Skill is intended to work in both ChatGPT and Codex.
+
+- Use only tools and capabilities actually exposed by the current runtime.
+- Never assume `mcp__codex_app__open_in_codex`, `referenced_image_paths`, or any other surface-specific API exists.
+- A missing optional capability must degrade gracefully to the prompt-only or text-style path instead of failing the whole Skill.
 
 ## Utilities
 
-- Rebuild the derived index and gallery: `python scripts/build_library.py`
-- Split contact sheets into numbered single images: `python scripts/split_contact_sheets.py`
-- Validate all source/index/gallery invariants: `python scripts/validate_library.py`
-- Produce a deterministic CLI prompt draft: `python scripts/prompt_style.py --style 18 --theme "秋天的第一杯奶茶"`
-- Resolve image-reference policy: `python scripts/resolve_reference.py --model <model> --style 18`
+- Rebuild derived style data and gallery: `python scripts/build_library.py`
+- Split contact sheets into numbered images: `python scripts/split_contact_sheets.py`
+- Produce a deterministic prompt draft: `python scripts/prompt_style.py --style 18 --theme "秋天的第一杯奶茶"`
+- Resolve preferred image-reference strategy: `python scripts/resolve_reference.py --model <model> --style 18`
 
-The CLI is a convenience check. For normal conversational use, write natural bilingual prompts rather than echoing its template mechanically.
+The CLI utilities are convenience checks. In normal conversation, write natural bilingual prompts rather than mechanically echoing their templates.
